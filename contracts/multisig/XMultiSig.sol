@@ -4,6 +4,7 @@ pragma solidity >=0.7.0 <0.9.0;
 
 import "./OwnerManager.sol";
 import "./SignatureDecoder.sol";
+import "./Enum.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
 /// @title XMultiSig - A multisignature wallet with support for confirmations using signed messages based on ERC191.
@@ -68,6 +69,7 @@ contract XMultiSig is
         address to,
         uint256 value,
         bytes calldata data,
+        Enum.Operation operation,
         bytes memory signatures
     ) public payable virtual returns (bool success) {
         bytes32 txHash;
@@ -85,6 +87,7 @@ contract XMultiSig is
             txHash = keccak256(txHashData);
             checkSignatures(txHash, txHashData, signatures);
         }
+        success = execute(to, value, data, operation, gasleft() - 2500);
     }
 
     /**
@@ -208,5 +211,32 @@ contract XMultiSig is
         uint256 _nonce
     ) public view returns (bytes32) {
         return keccak256(encodeTransactionData(to, value, data, _nonce));
+    }
+
+    /**
+     * @notice Executes either a delegatecall or a call with provided parameters.
+     * @param to Destination address.
+     * @param value Ether value.
+     * @param data Data payload.
+     * @param operation Operation type.
+     * @return success boolean flag indicating if the call succeeded.
+     */
+    function execute(
+        address to,
+        uint256 value,
+        bytes memory data,
+        Enum.Operation operation,
+        uint256 txGas
+    ) internal returns (bool success) {
+        if (operation == Enum.Operation.DelegateCall) {
+            assembly {
+                success := delegatecall(txGas, to, add(data, 0x20), mload(data), 0, 0)
+            }
+        } else {
+            // solhint-disable-next-line no-inline-assembly
+            assembly {
+                success := call(txGas, to, value, add(data, 0x20), mload(data), 0, 0)
+            }
+        }
     }
 }
