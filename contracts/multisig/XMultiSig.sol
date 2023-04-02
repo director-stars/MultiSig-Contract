@@ -87,7 +87,17 @@ contract XMultiSig is
             txHash = keccak256(txHashData);
             checkSignatures(txHash, txHashData, signatures);
         }
-        success = execute(to, value, data, operation, gasleft() - 2500);
+
+        bool success;
+
+        if (operation == Enum.Operation.DelegateCall) {
+            (success, ) = to.delegatecall(data);
+        }
+        else {
+            (success, ) = to.call{value:value}(data);
+        }
+        
+        require(success, "Failed transaction");
     }
 
     /**
@@ -211,32 +221,5 @@ contract XMultiSig is
         uint256 _nonce
     ) public view returns (bytes32) {
         return keccak256(encodeTransactionData(to, value, data, _nonce));
-    }
-
-    /**
-     * @notice Executes either a delegatecall or a call with provided parameters.
-     * @param to Destination address.
-     * @param value Ether value.
-     * @param data Data payload.
-     * @param operation Operation type.
-     * @return success boolean flag indicating if the call succeeded.
-     */
-    function execute(
-        address to,
-        uint256 value,
-        bytes memory data,
-        Enum.Operation operation,
-        uint256 txGas
-    ) internal returns (bool success) {
-        if (operation == Enum.Operation.DelegateCall) {
-            assembly {
-                success := delegatecall(txGas, to, add(data, 0x20), mload(data), 0, 0)
-            }
-        } else {
-            // solhint-disable-next-line no-inline-assembly
-            assembly {
-                success := call(txGas, to, value, add(data, 0x20), mload(data), 0, 0)
-            }
-        }
     }
 }
